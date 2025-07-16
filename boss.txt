@@ -1,3 +1,5 @@
+repeat task.wait() until game:IsLoaded()
+
 -- 📦 Load Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -20,7 +22,6 @@ local showHealth = false
 local lockAim = false
 local selectedBoss = nil
 local currentTarget = nil
-local noClip = false
 local movingToOrbit = false
 local angle = 0
 local orbitTween = nil
@@ -42,10 +43,9 @@ local function getClosestBoss()
 end
 
 local centerPosition = Vector3.new(-2572, 277, -1375)
-local radius = 32
-local speed = 4.9
+local radius = 19
+local speed = 2.9
 local heightOffset = 5
-
 
 local function moveToOrbit()
 	if not HumanoidRootPart or movingToOrbit then return end
@@ -68,7 +68,7 @@ local function moveToOrbit()
 	end)
 end
 
--- 🔁 Xoay quanh (mượt + dừng tween đúng cách)
+-- 🔁 Xoay quanh
 RunService.RenderStepped:Connect(function(dt)
 	if rotating and HumanoidRootPart then
 		angle += (math.rad(360) / speed) * dt
@@ -78,8 +78,7 @@ RunService.RenderStepped:Connect(function(dt)
 
 		if orbitTween then orbitTween:Cancel() end
 		orbitTween = TweenService:Create(HumanoidRootPart, TweenInfo.new(0.08, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
-	CFrame = CFrame.new(targetPosition, centerPosition)
-
+			CFrame = CFrame.new(targetPosition, centerPosition)
 		})
 		orbitTween:Play()
 	end
@@ -100,7 +99,7 @@ end)()
 local gui = Instance.new("ScreenGui", game.CoreGui)
 local frame = Instance.new("Frame", gui)
 frame.Position = UDim2.new(0.7, 0, 0.35, 0)
-frame.Size = UDim2.new(0, 300, 0, 330)
+frame.Size = UDim2.new(0, 300, 0, 410)
 frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 frame.BackgroundTransparency = 0.2
 frame.BorderSizePixel = 0
@@ -131,7 +130,7 @@ title.Font = Enum.Font.FredokaOne
 title.TextSize = 22
 
 local subtitle = Instance.new("TextLabel", frame)
-subtitle.Text = "Tuyệt Đối Không Dùng Phóng Lợn !"
+subtitle.Text = "Không Khuyên Dùng Phóng Lợn !"
 subtitle.Position = UDim2.new(0, 0, 0, 35)
 subtitle.Size = UDim2.new(1, 0, 0, 20)
 subtitle.BackgroundTransparency = 1
@@ -166,23 +165,31 @@ local function createButton(text)
 	return btn
 end
 
-local autoAttackBtn = createButton("🗡️ Tự đánh khi cầm vũ khí")
-autoAttackBtn.Parent = buttonContainer
-autoAttackBtn.MouseButton1Click:Connect(function()
-	attacking = not attacking
-	autoAttackBtn.Text = attacking and "✅ Đang Tự đánh" or "🗡️ Tự đánh khi cầm vũ khí"
-end)
+-- ⚔️ Auto Farm Boss (gộp lock aim + auto attack + xoay quanh)
+local autoFarmBossBtn = createButton("⚔️ Auto Farm Boss")
+autoFarmBossBtn.Parent = buttonContainer
+autoFarmBossBtn.MouseButton1Click:Connect(function()
+	lockAim = not lockAim
+	attacking = lockAim
 
-local toggleOrbitBtn = createButton("🔁 Xoay quanh")
-toggleOrbitBtn.Parent = buttonContainer
-toggleOrbitBtn.MouseButton1Click:Connect(function()
-	if rotating then
+	if lockAim then
+		selectedBoss = getClosestBoss()
+		if selectedBoss and selectedBoss:FindFirstChild("HumanoidRootPart") then
+			currentTarget = selectedBoss
+			moveToOrbit()
+			rotating = true
+			autoFarmBossBtn.Text = "✅ Đang Farm Boss"
+		else
+			lockAim = false
+			attacking = false
+			rotating = false
+			autoFarmBossBtn.Text = "⚔️ Auto Farm Boss"
+		end
+	else
+		currentTarget = nil
 		rotating = false
 		if orbitTween then orbitTween:Cancel() orbitTween = nil end
-		toggleOrbitBtn.Text = "🔁 Xoay quanh"
-	else
-		moveToOrbit()
-		toggleOrbitBtn.Text = "✅ Đang xoay quanh"
+		autoFarmBossBtn.Text = "⚔️ Auto Farm Boss"
 	end
 end)
 
@@ -193,28 +200,7 @@ healthBtn.MouseButton1Click:Connect(function()
 	healthBtn.Text = showHealth and "✅ Đang hiển thị máu" or "📊 Hiển thị máu Boss"
 end)
 
-local lockAimBtn = createButton("🎯 Ghim Tâm Vào Boss")
-lockAimBtn.Parent = buttonContainer
-lockAimBtn.MouseButton1Click:Connect(function()
-	lockAim = not lockAim
-	lockAimBtn.Text = lockAim and "✅ Đang Ghim Tâm" or "🎯 Ghim Tâm Vào Boss"
-	if lockAim then
-		selectedBoss = getClosestBoss()
-		if selectedBoss and selectedBoss:FindFirstChild("HumanoidRootPart") then
-			currentTarget = selectedBoss
-		else
-			lockAim = false
-			lockAimBtn.Text = "🎯 Ghim Tâm Vào Boss"
-		end
-	else
-		currentTarget = nil
-	end
-end)
-
--- ⚙️ Nhặt vật phẩm
 local autoPickup = false
-
--- 🔘 Nút nhặt đồ
 local pickupBtn = createButton("🎁 Tự nhặt vật phẩm rơi")
 pickupBtn.Parent = buttonContainer
 pickupBtn.MouseButton1Click:Connect(function()
@@ -240,85 +226,90 @@ task.spawn(function()
 	end
 end)
 
+-- 🩸 Hiển thị máu boss
+local bossHpLabel = Instance.new("TextLabel", gui)
+bossHpLabel.Size = UDim2.new(0, 400, 0, 30)
+bossHpLabel.Position = UDim2.new(0.5, -200, 0, 10)
+bossHpLabel.BackgroundTransparency = 0.3
+bossHpLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+bossHpLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+bossHpLabel.Font = Enum.Font.GothamBold
+bossHpLabel.TextSize = 18
+bossHpLabel.TextXAlignment = Enum.TextXAlignment.Center
+Instance.new("UICorner", bossHpLabel).CornerRadius = UDim.new(0, 6)
 
-local bossHpLabelCorner = Instance.new("TextLabel", gui)
-bossHpLabelCorner.Size = UDim2.new(0, 400, 0, 30)
-bossHpLabelCorner.Position = UDim2.new(0.5, -200, 0, 10)
-bossHpLabelCorner.BackgroundTransparency = 0.3
-bossHpLabelCorner.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-bossHpLabelCorner.TextColor3 = Color3.fromRGB(255, 255, 255)
-bossHpLabelCorner.Font = Enum.Font.GothamBold
-bossHpLabelCorner.TextSize = 18
-bossHpLabelCorner.Text = " Boss: Đang tìm gần nhất..."
-bossHpLabelCorner.TextXAlignment = Enum.TextXAlignment.Center
-bossHpLabelCorner.BorderSizePixel = 0
-Instance.new("UICorner", bossHpLabelCorner).CornerRadius = UDim.new(0, 6)
+coroutine.wrap(function()
+	while true do
+		if showHealth and currentTarget and currentTarget:FindFirstChild("Humanoid") then
+			local hp = math.floor(currentTarget.Humanoid.Health)
+			local max = math.floor(currentTarget.Humanoid.MaxHealth)
+			bossHpLabel.Text = " " .. currentTarget.Name .. ": " .. hp .. " / " .. max
+		elseif not showHealth then
+			bossHpLabel.Text = ""
+		end
+		task.wait(0.5)
+	end
+end)()
 
-
-local waitingForNewBoss = false
-
+-- 🎯 Lock Aim liên tục và tự chọn boss mới
 RunService.RenderStepped:Connect(function()
-	-- Nếu không khóa tâm hoặc không có boss → thoát
-	if not lockAim or not currentTarget then return end
+	if not lockAim then return end
 
-	-- Nếu boss bị xóa, mất Humanoid hoặc RootPart → reset
-	if not currentTarget:IsDescendantOf(game)
-		or not currentTarget:FindFirstChild("Humanoid")
-		or not currentTarget:FindFirstChild("HumanoidRootPart") then
+	if not currentTarget or not currentTarget:IsDescendantOf(workspace)
+		or not currentTarget:FindFirstChild("HumanoidRootPart")
+		or (currentTarget:FindFirstChild("Humanoid") and currentTarget.Humanoid.Health <= 0) then
 
-		lockAim = false
-		currentTarget = nil
-		return
+		local newBoss = getClosestBoss()
+		if newBoss then
+			currentTarget = newBoss
+			selectedBoss = newBoss
+		end
 	end
 
-	local humanoid = currentTarget:FindFirstChild("Humanoid")
-	if humanoid and humanoid.Health <= 0 and not waitingForNewBoss then
-		lockAim = false
-		waitingForNewBoss = true
-
-		task.spawn(function()
-			-- Đợi boss biến mất hoàn toàn khỏi Workspace
-			repeat task.wait()
-			until not currentTarget or not currentTarget:IsDescendantOf(game)
-
-			-- Tìm boss mới
-			repeat
-				selectedBoss = getClosestBoss()
-				currentTarget = selectedBoss
-				task.wait(0.5)
-			until currentTarget and currentTarget:FindFirstChild("Humanoid") and currentTarget.Humanoid.Health > 0
-
-			lockAim = true
-			waitingForNewBoss = false
-		end)
-	end
-
-	-- Ghim tâm nếu boss còn sống và có đầy đủ part
-	if lockAim and currentTarget and currentTarget:FindFirstChild("HumanoidRootPart") then
+	if currentTarget and currentTarget:FindFirstChild("HumanoidRootPart") then
 		local npcPos = currentTarget.HumanoidRootPart.Position
 		local currentPos = HumanoidRootPart.Position
 		local lookAt = CFrame.new(currentPos, npcPos)
-		local _, y, _ = lookAt:ToEulerAnglesYXZ()
+		local _, y = lookAt:ToEulerAnglesYXZ()
 		HumanoidRootPart.CFrame = CFrame.new(currentPos) * CFrame.Angles(0, y, 0)
 	end
 end)
 
+-- ⭕ Bán kính hiện tại
+local radiusLabel = createButton("⭕ Bán kính: " .. tostring(radius))
+radiusLabel.AutoButtonColor = false
+radiusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+radiusLabel.BackgroundTransparency = 1
+radiusLabel.MouseButton1Click:Connect(function() end) -- vô hiệu
 
+radiusLabel.Parent = buttonContainer
 
--- 🩸 Cập nhật máu boss
-coroutine.wrap(function()
-	while true do
-		if showHealth then
-			selectedBoss = getClosestBoss()
-			if selectedBoss and selectedBoss:FindFirstChild("Humanoid") and selectedBoss:FindFirstChild("HumanoidRootPart") then
-				local hp = math.floor(selectedBoss.Humanoid.Health)
-				local max = math.floor(selectedBoss.Humanoid.MaxHealth)
-				bossHpLabelCorner.Text = " " .. selectedBoss.Name .. ": " .. hp .. " / " .. max
-			end
-		end
-		task.wait(0.3)
-	end
-end)()
+-- 🔼 Tăng bán kính
+local increaseRadiusBtn = createButton("➕ Tăng Bán Kính")
+increaseRadiusBtn.Parent = buttonContainer
+increaseRadiusBtn.MouseButton1Click:Connect(function()
+	radius += 2
+	if radius > 35 then radius = 35 end
+	radiusLabel.Text = "⭕ Bán kính: " .. tostring(radius)
+end)
+
+-- 🔽 Giảm bán kính
+local decreaseRadiusBtn = createButton("➖ Giảm Bán Kính")
+decreaseRadiusBtn.Parent = buttonContainer
+decreaseRadiusBtn.MouseButton1Click:Connect(function()
+	radius -= 2
+	if radius < 8 then radius = 8 end
+	radiusLabel.Text = "⭕ Bán kính: " .. tostring(radius)
+end)
+
+-- 🔁 Nút điều chỉnh tốc độ xoay
+local speedBtn = createButton("⏩ Tốc độ: " .. tostring(speed))
+speedBtn.Parent = buttonContainer
+speedBtn.MouseButton1Click:Connect(function()
+	speed += 0.2
+	if speed > 4 then speed = 2 end
+	speedBtn.Text = "⏩ Tốc độ: " .. tostring(speed)
+end)
 
 
 -- ❌ Nút đóng GUI
@@ -334,3 +325,4 @@ Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
 closeBtn.MouseButton1Click:Connect(function()
 	gui:Destroy()
 end)
+
