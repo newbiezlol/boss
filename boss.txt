@@ -43,8 +43,8 @@ local function getClosestBoss()
 end
 
 local centerPosition = Vector3.new(-2572, 277, -1375)
-local radius = 19
-local speed = 2.9
+local radius = 21
+local speed = 3.1
 local heightOffset = 5
 
 local function moveToOrbit()
